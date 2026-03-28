@@ -1,4 +1,5 @@
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent/testing.dart';
 import 'package:test/test.dart';
 
 // ---------------------------------------------------------------------------

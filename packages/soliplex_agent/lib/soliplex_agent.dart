@@ -32,9 +32,6 @@ export 'package:soliplex_logging/soliplex_logging.dart' show LogManager, Logger;
 export 'src/host/agent_api.dart';
 export 'src/host/blackboard_api.dart';
 export 'src/host/direct_blackboard_api.dart';
-export 'src/host/fake_agent_api.dart';
-export 'src/host/fake_blackboard_api.dart';
-export 'src/host/fake_host_api.dart';
 export 'src/host/form_api.dart';
 export 'src/host/host_api.dart';
 export 'src/host/mobile_platform_constraints.dart';
@@ -53,12 +50,9 @@ export 'src/models/thread_key.dart';
 export 'src/orchestration/ag_ui_llm_provider.dart';
 export 'src/orchestration/agent_llm_provider.dart';
 export 'src/orchestration/chat_fn_llm_provider.dart';
-export 'src/orchestration/error_classifier.dart';
 export 'src/orchestration/execution_event.dart';
-export 'src/orchestration/run_orchestrator.dart';
 export 'src/orchestration/run_state.dart';
 export 'src/orchestration/streaming_llm_provider.dart';
-export 'src/orchestration/tool_call_parser.dart';
 // ── Runtime ──
 export 'src/runtime/agent_runtime.dart';
 export 'src/runtime/agent_session.dart';
@@ -71,6 +65,4 @@ export 'src/runtime/session_extension.dart';
 // ── Scripting ──
 export 'src/scripting/script_environment.dart';
 // ── Tools ──
-export 'src/tools/tool_execution_context.dart';
 export 'src/tools/tool_registry.dart';
-export 'src/tools/tool_registry_resolver.dart';

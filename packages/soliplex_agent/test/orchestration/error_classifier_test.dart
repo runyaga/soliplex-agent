@@ -1,4 +1,5 @@
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent/src/orchestration/error_classifier.dart';
 import 'package:test/test.dart';
 
 void main() {

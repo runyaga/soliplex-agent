@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent/src/tools/tool_registry_resolver.dart';
 import 'package:test/test.dart';
 
 import '../helpers/fake_tool_execution_context.dart';

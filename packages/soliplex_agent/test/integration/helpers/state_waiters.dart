@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:soliplex_agent/soliplex_agent.dart';
+import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
 
 /// Waits until the orchestrator reaches [ToolYieldingState] or a terminal
 /// state, whichever comes first.
