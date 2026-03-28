@@ -1085,38 +1085,30 @@ void main() {
     });
   });
 
-  group('cachedHistory', () {
-    test('threads cachedHistory to orchestrator via runAgent input', () async {
+  group('automatic thread history', () {
+    test('second spawn on same thread includes prior conversation', () async {
       stubCreateThread();
       stubCreateRun();
       stubDeleteThread();
       stubRunAgent(stream: Stream.fromIterable(_happyPathEvents()));
 
-      final history = ThreadHistory(
-        messages: [
-          TextMessage.create(
-            id: 'prior-user',
-            user: ChatUser.user,
-            text: 'What color is the sky?',
-          ),
-          TextMessage.create(
-            id: 'prior-assistant',
-            user: ChatUser.assistant,
-            text: 'The sky is blue.',
-          ),
-        ],
-      );
+      // Turn 1.
+      final s1 = await runtime.spawn(roomId: _roomId, prompt: 'Hello');
+      await s1.result;
 
-      final session = await runtime.spawn(
+      // Stub a second run on the same thread.
+      stubRunAgent(stream: Stream.fromIterable(_happyPathEvents()));
+      stubCreateRun();
+
+      // Turn 2 — same thread, runtime should auto-inject history.
+      final s2 = await runtime.spawn(
         roomId: _roomId,
-        prompt: 'And what about grass?',
-        cachedHistory: history,
+        prompt: 'Follow up',
+        threadId: s1.threadKey.threadId,
       );
-      final result = await session.result;
+      await s2.result;
 
-      expect(result, isA<AgentSuccess>());
-
-      // Capture the input sent to runAgent.
+      // Capture all runAgent calls.
       final captured = verify(
         () => agUiStreamClient.runAgent(
           any(),
@@ -1125,37 +1117,22 @@ void main() {
         ),
       ).captured;
 
-      final input = captured.first as SimpleRunAgentInput;
-      final messages = input.messages!;
-      // AG-UI messages: prior-user, prior-assistant, new user message = 3
-      expect(messages, hasLength(3));
-      expect(
-        messages.first,
-        isA<UserMessage>().having(
-          (m) => m.content,
-          'content',
-          'What color is the sky?',
-        ),
-      );
-      expect(
-        messages[1],
-        isA<AssistantMessage>().having(
-          (m) => m.content,
-          'content',
-          'The sky is blue.',
-        ),
-      );
+      // Second call should have prior messages + new user message.
+      final input2 = captured[1] as SimpleRunAgentInput;
+      final messages = input2.messages!;
+      // Prior: user + assistant from turn 1 + new user = 3
+      expect(messages.length, greaterThanOrEqualTo(3));
       expect(
         messages.last,
         isA<UserMessage>().having(
           (m) => m.content,
           'content',
-          'And what about grass?',
+          'Follow up',
         ),
       );
     });
 
-    test('null cachedHistory sends only the new user message', () async {
+    test('first spawn on new thread sends only user message', () async {
       stubCreateThread();
       stubCreateRun();
       stubDeleteThread();
@@ -1178,88 +1155,29 @@ void main() {
       expect(messages.first, isA<UserMessage>());
     });
 
-    test('aguiState from history is preserved in Conversation', () async {
+    test('ephemeral sessions do not accumulate history', () async {
       stubCreateThread();
       stubCreateRun();
       stubDeleteThread();
       stubRunAgent(stream: Stream.fromIterable(_happyPathEvents()));
 
-      final history = ThreadHistory(
-        messages: [
-          TextMessage.create(
-            id: 'prior-user',
-            user: ChatUser.user,
-            text: 'Search for X',
-          ),
-        ],
-        aguiState: const {'citations': 'some-data'},
-      );
-
-      final session = await runtime.spawn(
+      final s1 = await runtime.spawn(
         roomId: _roomId,
-        prompt: 'Tell me more',
-        cachedHistory: history,
+        prompt: 'Ephemeral',
+        ephemeral: true,
       );
+      await s1.result;
 
-      // Observe the initial RunningState to inspect the Conversation.
-      Conversation? capturedConversation;
-      final sub = session.stateChanges.listen((state) {
-        if (state is RunningState && capturedConversation == null) {
-          capturedConversation = state.conversation;
-        }
-      });
-
-      await session.result;
-      await sub.cancel();
-
-      expect(capturedConversation, isNotNull);
-      expect(
-        capturedConversation!.aguiState,
-        containsPair('citations', 'some-data'),
-      );
-    });
-
-    test('cachedHistory with tool call messages converts correctly', () async {
-      stubCreateThread();
-      stubCreateRun();
-      stubDeleteThread();
+      // Stub second run.
       stubRunAgent(stream: Stream.fromIterable(_happyPathEvents()));
+      stubCreateRun();
 
-      final history = ThreadHistory(
-        messages: [
-          TextMessage.create(
-            id: 'prior-user',
-            user: ChatUser.user,
-            text: 'Get weather',
-          ),
-          ToolCallMessage.fromExecuted(
-            id: 'tool-msg-1',
-            toolCalls: const [
-              ToolCallInfo(
-                id: 'tc-prior',
-                name: 'weather',
-                arguments: '{"city":"NYC"}',
-                status: ToolCallStatus.completed,
-                result: '72°F',
-              ),
-            ],
-          ),
-          TextMessage.create(
-            id: 'prior-assistant',
-            user: ChatUser.assistant,
-            text: 'It is 72°F in NYC.',
-          ),
-        ],
-      );
-
-      final session = await runtime.spawn(
+      final s2 = await runtime.spawn(
         roomId: _roomId,
-        prompt: 'What about tomorrow?',
-        cachedHistory: history,
+        prompt: 'Another',
+        threadId: s1.threadKey.threadId,
       );
-      final result = await session.result;
-
-      expect(result, isA<AgentSuccess>());
+      await s2.result;
 
       final captured = verify(
         () => agUiStreamClient.runAgent(
@@ -1269,11 +1187,10 @@ void main() {
         ),
       ).captured;
 
-      final input = captured.first as SimpleRunAgentInput;
-      final messages = input.messages!;
-      // user + assistant(toolCalls) + tool_result + assistant(text)
-      // + new user = 5
-      expect(messages.length, greaterThanOrEqualTo(4));
+      // Second call should have only the new message (no history from
+      // ephemeral session).
+      final input2 = captured[1] as SimpleRunAgentInput;
+      expect(input2.messages, hasLength(1));
     });
   });
 

@@ -7,6 +7,7 @@ import 'package:soliplex_agent/src/models/thread_key.dart';
 import 'package:soliplex_agent/src/orchestration/ag_ui_llm_provider.dart';
 import 'package:soliplex_agent/src/orchestration/agent_llm_provider.dart';
 import 'package:soliplex_agent/src/orchestration/run_orchestrator.dart';
+import 'package:soliplex_agent/src/orchestration/run_state.dart';
 import 'package:soliplex_agent/src/runtime/agent_session.dart';
 import 'package:soliplex_agent/src/runtime/agent_session_state.dart';
 import 'package:soliplex_agent/src/runtime/agent_ui_delegate.dart';
@@ -91,6 +92,7 @@ class AgentRuntime {
   final Map<String, AgentSession> _sessions = {};
   final Map<String, Timer> _rootTimeoutTimers = {};
   final Set<String> _deletedThreadIds = {};
+  final Map<String, ThreadHistory> _threadHistories = {};
   final _spawnQueue = <Completer<void>>[];
   final StreamController<List<AgentSession>> _sessionController =
       StreamController<List<AgentSession>>.broadcast();
@@ -136,7 +138,6 @@ class AgentRuntime {
     bool ephemeral = false,
     bool autoDispose = false,
     AgentSession? parent,
-    ThreadHistory? cachedHistory,
   }) async {
     _guardNotDisposed();
     _guardWasmReentrancy();
@@ -144,6 +145,7 @@ class AgentRuntime {
     _guardSpawnDepth(parent);
     final depth = parent == null ? 0 : parent.depth + 1;
     final (key, existingRunId) = await _resolveThread(roomId, threadId);
+    final history = _threadHistories[key.threadId];
     final session = await _buildSession(
       key: key,
       roomId: roomId,
@@ -156,7 +158,7 @@ class AgentRuntime {
       await session.start(
         userMessage: prompt,
         existingRunId: existingRunId,
-        cachedHistory: cachedHistory,
+        cachedHistory: history,
       );
     } on Object {
       parent?.removeChild(session);
@@ -361,6 +363,7 @@ class AgentRuntime {
     unawaited(
       future.then((_) async {
         if (_disposed) return;
+        _captureThreadHistory(session);
         if (autoDispose) {
           await _handleSessionComplete(session);
         } else {
@@ -390,6 +393,19 @@ class AgentRuntime {
     }
     session.dispose();
     _removeSession(session);
+  }
+
+  /// Captures conversation state from a completed session so subsequent
+  /// spawns on the same thread automatically include prior context.
+  void _captureThreadHistory(AgentSession session) {
+    final state = session.runState.value;
+    if (state is! CompletedState) return;
+    if (session.ephemeral) return;
+    _threadHistories[session.threadKey.threadId] = ThreadHistory(
+      messages: state.conversation.messages,
+      aguiState: state.conversation.aguiState,
+      messageStates: state.conversation.messageStates,
+    );
   }
 
   // ---------------------------------------------------------------------------
