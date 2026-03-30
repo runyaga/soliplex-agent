@@ -395,17 +395,27 @@ class AgentRuntime {
     _removeSession(session);
   }
 
-  /// Captures conversation state from a completed session so subsequent
-  /// spawns on the same thread automatically include prior context.
+  /// Captures conversation state from a completed or cancelled session so
+  /// subsequent spawns on the same thread automatically include prior context.
   void _captureThreadHistory(AgentSession session) {
-    final state = session.runState.value;
-    if (state is! CompletedState) return;
     if (session.ephemeral) return;
-    _threadHistories[session.threadKey.threadId] = ThreadHistory(
-      messages: state.conversation.messages,
-      aguiState: state.conversation.aguiState,
-      messageStates: state.conversation.messageStates,
-    );
+    final state = session.runState.value;
+    final history = switch (state) {
+      CompletedState(:final conversation) => ThreadHistory(
+          messages: conversation.messages,
+          aguiState: conversation.aguiState,
+          messageStates: conversation.messageStates,
+        ),
+      CancelledState(:final conversation) when conversation != null =>
+        ThreadHistory(
+          messages: conversation.messages,
+          aguiState: conversation.aguiState,
+          messageStates: conversation.messageStates,
+        ),
+      _ => null,
+    };
+    if (history == null) return;
+    _threadHistories[session.threadKey.threadId] = history;
   }
 
   // ---------------------------------------------------------------------------
